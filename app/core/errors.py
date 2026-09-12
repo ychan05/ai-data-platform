@@ -1,8 +1,11 @@
 from fastapi import HTTPException
-
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from app.core.logging import get_logger
 
 class AppError(Exception):
-    """所有业务异常的基类。"""
+    """Base class for errors"""
 
     def __init__(self, code: str, message: str, status_code: int = 400):
         self.code = code
@@ -38,3 +41,64 @@ class SQLGenerationError(AppError):
 class PermissionDeniedError(AppError):
     def __init__(self, message: str = "权限不足"):
         super().__init__(code="PERMISSION_DENIED", message=message, status_code=403)
+        
+logger = get_logger(__name__)
+
+
+def register_exception_handlers(app: FastAPI):
+    """注册全局异常处理器。"""
+
+    @app.exception_handler(AppError)
+    async def app_error_handler(request: Request, exc: AppError):
+        request_id = getattr(request.state, "request_id", "")
+        logger.warning(
+            "app.error",
+            error_code=exc.code,
+            error_message=exc.message,
+            status_code=exc.status_code,
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "request_id": request_id,
+                }
+            },
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        request_id = getattr(request.state, "request_id", "")
+        return JSONResponse(
+            status_code=exc.status_code,
+            headers=exc.headers,
+            content={
+                "error": {
+                    "code": f"HTTP_{exc.status_code}",
+                    "message": str(exc.detail),
+                    "request_id": request_id,
+                }
+            },
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_error_handler(request: Request, exc: Exception):
+        request_id = getattr(request.state, "request_id", "")
+        logger.error(
+            "app.unhandled_error",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            exc_info=True,
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "服务内部错误，请稍后重试",
+                    "request_id": request_id,
+                }
+            },
+        )

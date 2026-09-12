@@ -7,9 +7,9 @@ from app.config.settings import get_settings
 def setup_logging():
     settings = get_settings()
 
-    # structlog 处理链
+    # structlog processing pipeline
     shared_processors = [
-        structlog.contextvars.merge_contextvars,  # ✅ 自动合并 request_id 等上下文
+        structlog.contextvars.merge_contextvars,  # Merge context vars
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
@@ -17,11 +17,11 @@ def setup_logging():
         structlog.processors.UnicodeDecoder(),
     ]
 
-    if settings.log_format == "json":
+    if settings.is_prod:
         renderer = structlog.processors.JSONRenderer()
     else:
-        # 开发环境用可读格式
-        renderer = structlog.dev.ConsoleRenderer()
+        # Renderer for human-readable format
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
 
     structlog.configure(
         processors=[

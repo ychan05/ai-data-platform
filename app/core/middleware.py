@@ -11,14 +11,14 @@ logger = get_logger(__name__)
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
-    """为每个请求注入 request_id，记录访问日志。"""
+    """Manages request context for looging and tracking"""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        # ✅ 生成 request_id
+        # Create a request ID for logging/tracking purposes. If the client provides one, use it; otherwise, generate a new one.
         request_id = request.headers.get("X-Request-Id") or f"req_{uuid.uuid4().hex[:12]}"
         request.state.request_id = request_id
 
-        # ✅ 绑定到 structlog 上下文（该请求内所有日志自动带上）
+        # Attach request info to the logging context
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(
             request_id=request_id,
@@ -30,7 +30,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
-        # ✅ 记录访问日志
+        # Record the log entry and latency
         latency_ms = round((time.perf_counter() - start_time) * 1000, 1)
         logger.info(
             "http.request.completed",
@@ -38,6 +38,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             latency_ms=latency_ms,
         )
 
-        # ✅ 把 request_id 写入响应头
+        # Add the request ID to the response headers for client-side tracking
         response.headers["X-Request-Id"] = request_id
         return response
