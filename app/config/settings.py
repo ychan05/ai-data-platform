@@ -24,7 +24,15 @@ class Settings(BaseSettings):
     # ── LLM ──
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
-
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_temperature: float = 0.0
+    openai_max_tokens: int = 2048
+    openai_timeout: int = 30
+    
+    # ── SQL Engine ──
+    sql_max_rows: int = 100
+    sql_timeout_seconds: int = 15
+    
     # ── Logging ──
     log_level: str = "INFO"
     log_format: str = "json"  # json / console

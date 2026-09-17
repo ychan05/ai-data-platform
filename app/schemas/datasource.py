@@ -13,6 +13,15 @@ class DataSourceCreate(BaseModel):
     password: str = Field(..., min_length=1)
 
 
+class DataSourceUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    host: Optional[str] = None
+    port: Optional[int] = Field(None, ge=1, le=65535)
+    database_name: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=1)
+
+
 class DataSourceResponse(BaseModel):
     id: int
     name: str
@@ -30,6 +39,7 @@ class DataSourceResponse(BaseModel):
 class DataSourceListResponse(BaseModel):
     items: list[DataSourceResponse]
     total: int
+    next_cursor: Optional[int] = None
 
 
 class ConnectionTestResponse(BaseModel):

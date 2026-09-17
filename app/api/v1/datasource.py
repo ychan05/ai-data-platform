@@ -6,6 +6,7 @@ from app.api.deps import get_current_user
 from app.models.user import User
 from app.schemas.datasource import (
     DataSourceCreate,
+    DataSourceUpdate,
     DataSourceResponse,
     DataSourceListResponse,
     ConnectionTestResponse,
@@ -29,13 +30,27 @@ async def create_datasource(
 
 @router.get("", response_model=DataSourceListResponse)
 async def list_datasources(
-    skip: int = Query(0, ge=0),
+    cursor: int | None = Query(None, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    items, total = await ds_service.list_datasources(db, current_user, skip, limit)
-    return DataSourceListResponse(items=items, total=total)
+    items, total, next_cursor = await ds_service.list_datasources(
+        db, current_user, cursor, limit
+    )
+    return DataSourceListResponse(
+        items=items, total=total, next_cursor=next_cursor
+    )
+
+
+@router.put("/{datasource_id}", response_model=DataSourceResponse)
+async def update_datasource(
+    datasource_id: int,
+    req: DataSourceUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await ds_service.update_datasource(db, current_user, datasource_id, req)
 
 
 @router.delete("/{datasource_id}", status_code=204)
