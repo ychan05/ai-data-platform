@@ -17,6 +17,30 @@ class ConversationResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ConversationListItem(BaseModel):
+    id: int
+    datasource_id: Optional[int]
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    last_message_summary: Optional[str] = None
+
+
+class ConversationListResponse(BaseModel):
+    items: list[ConversationListItem]
+    total: int
+    next_cursor: Optional[int] = None
+
+
+class MessageResponse(BaseModel):
+    role: str
+    content: str
+    created_at: datetime
+    generated_sql: Optional[str] = None
+    execution_ms: Optional[float] = None
+    row_count: Optional[int] = None
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
 

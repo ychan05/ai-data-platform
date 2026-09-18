@@ -1,12 +1,18 @@
 import json
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.models.datasource import DataSource
 from app.models.conversation import Conversation, Message
 from app.models.query_execution import QueryExecution
-from app.schemas.chat import ChatResponse, QueryResult
+from app.schemas.chat import (
+    ChatResponse,
+    ConversationListItem,
+    ConversationListResponse,
+    QueryResult,
+)
 from app.schemas.datasource import TableSchema
 from app.services.datasource import get_datasource
 from app.services.schema_inspector import introspect
@@ -47,6 +53,72 @@ async def get_conversation(
     if not conv:
         raise NotFoundError("对话", conversation_id)
     return conv
+
+
+async def list_conversations(
+    db: AsyncSession, user: User, cursor: int | None = None, limit: int = 20
+) -> ConversationListResponse:
+    total_stmt = select(func.count()).select_from(Conversation).where(
+        Conversation.user_id == user.id
+    )
+    total = (await db.execute(total_stmt)).scalar_one()
+
+    last_message_summary = (
+        select(Message.content)
+        .where(Message.conversation_id == Conversation.id)
+        .order_by(Message.created_at.desc(), Message.id.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    conditions = [Conversation.user_id == user.id]
+    if cursor is not None:
+        conditions.append(Conversation.id < cursor)
+
+    stmt = (
+        select(Conversation, last_message_summary.label("last_message_summary"))
+        .where(*conditions)
+        .order_by(Conversation.updated_at.desc(), Conversation.id.desc())
+        .limit(limit + 1)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+    has_next_page = len(rows) > limit
+    rows = rows[:limit]
+
+    items = [
+        ConversationListItem(
+            id=conversation.id,
+            datasource_id=conversation.datasource_id,
+            title=conversation.title,
+            created_at=conversation.created_at,
+            updated_at=conversation.updated_at,
+            last_message_summary=(
+                summary[:100] if summary is not None else None
+            ),
+        )
+        for conversation, summary in rows
+    ]
+    next_cursor = items[-1].id if has_next_page else None
+    return ConversationListResponse(
+        items=items,
+        total=total,
+        next_cursor=next_cursor,
+    )
+
+
+async def get_messages(
+    db: AsyncSession, user: User, conversation_id: int
+) -> list[Message]:
+    await get_conversation(db, user, conversation_id)
+
+    stmt = (
+        select(Message)
+        .options(selectinload(Message.query_execution))
+        .where(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at, Message.id)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def send_message(

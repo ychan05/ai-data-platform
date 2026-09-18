@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -6,7 +6,9 @@ from app.api.deps import get_current_user
 from app.models.user import User
 from app.schemas.chat import (
     ConversationCreate,
+    ConversationListResponse,
     ConversationResponse,
+    MessageResponse,
     ChatRequest,
     ChatResponse,
 )
@@ -25,6 +27,48 @@ async def create_conversation(
         db, current_user, req.datasource_id, req.title
     )
     return conv
+
+
+@router.get("", response_model=ConversationListResponse)
+async def list_conversations(
+    cursor: int | None = Query(None, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await chat_service.list_conversations(db, current_user, cursor, limit)
+
+
+@router.get("/{conversation_id}/messages", response_model=list[MessageResponse])
+async def list_conversation_messages(
+    conversation_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    messages = await chat_service.get_messages(db, current_user, conversation_id)
+    return [
+        MessageResponse(
+            role=message.role,
+            content=message.content,
+            created_at=message.created_at,
+            generated_sql=(
+                message.query_execution.generated_sql
+                if message.query_execution
+                else None
+            ),
+            execution_ms=(
+                message.query_execution.execution_ms
+                if message.query_execution
+                else None
+            ),
+            row_count=(
+                message.query_execution.row_count
+                if message.query_execution
+                else None
+            ),
+        )
+        for message in messages
+    ]
 
 
 @router.post("/{conversation_id}/chat", response_model=ChatResponse)
